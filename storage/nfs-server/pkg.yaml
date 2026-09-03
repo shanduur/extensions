@@ -1,0 +1,13 @@
+name: nfs-server
+variant: scratch
+shell: /bin/bash
+dependencies:
+  - stage: rpc-mountd
+  - stage: exportfs
+  - stage: nfsdcld
+  - stage: rpc-nfsd
+finalize:
+  - from: /rootfs
+    to: /rootfs
+  - from: /pkg/manifest.yaml
+    to: /

@@ -1,0 +1,39 @@
+name: nfsdcld
+depends:
+  - service: cri
+  # the directory is created by the nfsd kernel module (see the `nfsd`
+  # extension), which is also what registers the rpc_pipefs notifier that
+  # creates the nfsd/cld pipe nfsdcld attaches to
+  - path: /proc/fs/nfsd
+  - network:
+      - addresses
+      - connectivity
+      - hostname
+      - etcfiles
+container:
+  entrypoint: /sbin/nfsdcld
+  args:
+    - -F
+  security:
+    maskedPaths: []
+    readonlyPaths: []
+    rootfsPropagation: shared
+  mounts:
+    # nfs state directory; nfsdcld creates its sqlite database under
+    # /var/lib/nfs/nfsdcld itself
+    - source: /var/lib/nfs
+      destination: /var/lib/nfs
+      type: bind
+      options:
+        - rshared
+        - rbind
+        - rw
+    # nfsdcld talks to the kernel over the nfsd/cld pipe in rpc_pipefs. Nothing
+    # on Talos mounts rpc_pipefs, so mount it here: the kernel creates the pipe
+    # from its rpc_pipefs notifier as soon as the filesystem appears.
+    - source: rpc_pipefs
+      destination: /var/lib/nfs/rpc_pipefs
+      type: rpc_pipefs
+      options:
+        - rw
+restart: always

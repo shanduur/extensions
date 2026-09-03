@@ -1,0 +1,53 @@
+name: rpc-nfsd
+depends:
+  - service: cri
+  - service: ext-rpcbind
+  - service: ext-exportfs
+  # must be up before nfsd starts: nfsd4_client_tracking_init() runs once, at
+  # server start, and Talos kernels have CONFIG_NFSD_LEGACY_CLIENT_TRACKING off,
+  # so nfsdcld is the only NFSv4 client-tracking method available
+  - service: ext-nfsdcld
+  # the directory is created by the nfsd kernel module (see the `nfsd` extension)
+  - path: /proc/fs/nfsd
+  - network:
+      - addresses
+      - connectivity
+      - hostname
+      - etcfiles
+container:
+  entrypoint: /sbin/rpc.nfsd
+  args:
+    # thread count; all supported protocol versions (3, 4, 4.1, 4.2) are enabled
+    - "8"
+  security:
+    maskedPaths: []
+    readonlyPaths: []
+    rootfsPropagation: shared
+  mounts:
+    # nfs state directory, shared with exportfs and rpc.mountd
+    - source: /var/lib/nfs
+      destination: /var/lib/nfs
+      type: bind
+      options:
+        - rshared
+        - rbind
+        - rw
+    # kernel nfsd control interface. Mounted as a filesystem rather than
+    # bind-mounted from the host: nothing on Talos mounts it, and rpc.nfsd can
+    # only mount it itself by shelling out to /bin/mount, which this rootfs
+    # does not ship.
+    - source: nfsd
+      destination: /proc/fs/nfsd
+      type: nfsd
+      options:
+        - rw
+    # for rpcbind communication
+    - source: /run/rpcbind
+      destination: /run/rpcbind
+      type: bind
+      options:
+        - rshared
+        - rbind
+        - rw
+# rpc.nfsd starts the kernel server threads and exits
+restart: untilSuccess

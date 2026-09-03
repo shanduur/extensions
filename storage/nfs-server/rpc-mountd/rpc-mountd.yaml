@@ -1,0 +1,55 @@
+name: rpc-mountd
+depends:
+  - service: cri
+  - service: ext-rpcbind
+  - configuration: true
+  # the directory is created by the nfsd kernel module (see the `nfsd` extension)
+  - path: /proc/fs/nfsd
+  - network:
+      - addresses
+      - connectivity
+      - hostname
+      - etcfiles
+container:
+  entrypoint: /sbin/rpc.mountd
+  args:
+    - --foreground
+  security:
+    maskedPaths: []
+    readonlyPaths: []
+    rootfsPropagation: shared
+  mounts:
+    # nfs state directory, shared with exportfs and rpc.nfsd
+    - source: /var/lib/nfs
+      destination: /var/lib/nfs
+      type: bind
+      options:
+        - rshared
+        - rbind
+        - rw
+    # exported filesystems must be visible so mountd can resolve export paths
+    - source: /var/mnt
+      destination: /var/mnt
+      type: bind
+      options:
+        - rshared
+        - rbind
+        - rw
+    # kernel nfsd control interface. Mounted as a filesystem rather than
+    # bind-mounted from the host: nothing on Talos mounts it, and rpc.mountd
+    # cannot mount it itself (that path shells out to /bin/mount, which this
+    # rootfs does not ship).
+    - source: nfsd
+      destination: /proc/fs/nfsd
+      type: nfsd
+      options:
+        - rw
+    # for rpcbind communication
+    - source: /run/rpcbind
+      destination: /run/rpcbind
+      type: bind
+      options:
+        - rshared
+        - rbind
+        - rw
+restart: always

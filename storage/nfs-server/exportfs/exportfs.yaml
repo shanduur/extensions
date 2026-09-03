@@ -1,0 +1,49 @@
+name: exportfs
+depends:
+  - service: cri
+  # upstream runs `exportfs -r` after rpc.mountd is up (nfs-server.service
+  # ExecStartPre, ordered After=nfs-mountd.service)
+  - service: ext-rpc-mountd
+  - configuration: true
+  # the directory is created by the nfsd kernel module (see the `nfsd` extension)
+  - path: /proc/fs/nfsd
+  - network:
+      - addresses
+      - connectivity
+      - hostname
+      - etcfiles
+container:
+  entrypoint: /sbin/exportfs
+  args:
+    - -r
+    - -v
+  security:
+    maskedPaths: []
+    readonlyPaths: []
+    rootfsPropagation: shared
+  mounts:
+    # nfs state directory, shared with rpc.mountd and rpc.nfsd
+    - source: /var/lib/nfs
+      destination: /var/lib/nfs
+      type: bind
+      options:
+        - rshared
+        - rbind
+        - rw
+    # exported filesystems must be visible so exportfs can resolve the paths
+    # listed in /etc/exports
+    - source: /var/mnt
+      destination: /var/mnt
+      type: bind
+      options:
+        - rshared
+        - rbind
+        - rw
+    # kernel nfsd control interface, used for filehandle lookups
+    - source: nfsd
+      destination: /proc/fs/nfsd
+      type: nfsd
+      options:
+        - rw
+# exportfs is a one-shot: it syncs /var/lib/nfs/etab from /etc/exports and exits
+restart: untilSuccess
